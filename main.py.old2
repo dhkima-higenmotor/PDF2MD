@@ -1,0 +1,654 @@
+import tkinter as tk
+from tkinter import ttk, filedialog, messagebox, scrolledtext
+import json
+import os
+import subprocess
+import requests
+import tempfile
+import time
+from pathlib import Path
+from markdown_it import MarkdownIt
+import shutil
+import base64
+import sys
+import io
+
+class TextRedirector(io.TextIOBase):
+    def __init__(self, widget):
+        self.widget = widget
+
+    def write(self, s):
+        self.widget.config(state=tk.NORMAL)
+        self.widget.insert(tk.END, s)
+        self.widget.see(tk.END)
+        self.widget.config(state=tk.DISABLED)
+        return len(s)
+
+    def flush(self):
+        pass
+
+def load_config():
+    """config.json 파일을 로드하거나 기본값 반환"""
+    default_config = {
+        "marker_url": "http://127.0.0.1:8000",
+        "ollama_url": "http://127.0.0.1:11434", 
+        "Chunk_size": 5,
+        "timeout": 200,
+        "retries": 100,
+        "retry_delay": 10,
+        "temperature": 0.3
+    }
+    
+    try:
+        if os.path.exists("config.json"):
+            with open("config.json", "r", encoding="utf-8") as f:
+                loaded = json.load(f)
+                # 기본값과 병합
+                for key in default_config:
+                    if key in loaded:
+                        default_config[key] = loaded[key]
+    except:
+        pass
+        
+    return default_config
+
+def load_prompt():
+    """prompt.md 파일을 로드하거나 기본값 반환"""
+    default_prompt = """You are a professional, technical translator specializing in converting English Markdown documents to Korean.
+
+**Translation rules:**
+
+- Accurately translate English passages into clear and natural Korean.
+- **Strictly preserve the original Markdown structure.** Do not alter headers (`#`, `##`, `###`), bold/italic (`**`, `*`, `_`), lists (`-`, `*`), tables (`|`, `---`), or link/image URLs. Translate only inner text, captions, and descriptions.
+- For all math equations enclosed by `$`, `$$` :
+  -- **Preserve the mathematical content.**
+  -- **Convert the LaTeX syntax to Typst-compatible math syntax** while maintaining the equation's intent (e.g., `$\frac{a}{b}$` → `$ a / b $`, inline; `$$x^2$$` → `$ x^2 $`, single line with spaces; matrices and special functions should be converted to Typst equivalents).
+  -- **Only translate the text surrounding the equations.**
+  -- **If LaTeX syntax is incorrect, correct it during conversion.**
+- **Inside tables, translate only the textual content.** Preserve all table markers and separators.
+- **Special terms (e.g., API, motor, bearing) and proper names should be followed by the original English in parentheses.**
+- If the meaning is ambiguous, prioritize natural, context-aware translation over literal word-for-word translation.
+- If you cannot translate a section, leave a blank line. Never include the original English or any apologies/explanations.
+- **Output only the translated Korean text.** Do not include explanations, commentary, or the original English.
+- **Never output the original English text or any other languages.**
+- If the input is already in Korean or another language, pass it through unchanged.
+
+**Additional instructions for math equations:**
+
+- **LaTeX → Typst conversion:**
+  -- Replace LaTeX-specific commands with their Typst equivalents (e.g., `\frac{a}{b}` → `a / b` for inline, or `frac(a, b)` for display, depending on Typst convention).
+  -- Adjust delimiters ($...$, $$...$$ → $ ... $ or $$ ... $$
+  -- Preserve function names and variables.
+  -- For matrices, arrays, and special functions, map to Typst's native functions.
+- If in doubt, maintain readability and logical consistency with Typst's math mode syntax
+
+Translate this English Markdown text into Korean following the rules above:"""
+    
+    try:
+        if os.path.exists("prompt.md"):
+            with open("prompt.md", "r", encoding="utf-8") as f:
+                return f.read()
+    except:
+        pass
+        
+    return default_prompt
+
+def get_ollama_models(ollama_url):
+    """Ollama API에서 사용 가능한 모델 목록 가져오기"""
+    try:
+        response = requests.get(f"{ollama_url}/api/tags")
+        if response.status_code == 200:
+            data = response.json()
+            models = [model['name'] for model in data.get('models', [])]
+            return models
+    except:
+        pass
+    return ["gpt-oss:20b"]  # 기본값
+
+def json_to_markdown(json_data, output_md_file, images_dir='img'):
+    """
+    JSON 데이터를 Markdown으로 변환합니다.
+    이미지 데이터는 파일로 저장하고, Markdown에서는 이미지 링크를 삽입합니다.
+    """
+    # 이미지 저장 디렉터리 생성
+    if not os.path.exists(images_dir):
+        os.makedirs(images_dir)
+    markdown_lines = []
+    def process_element(element, indent=0):
+        if isinstance(element, dict):
+            for key, value in element.items():
+                # 'output' 키인 경우 키 이름 없이 내용만 처리
+                if key == "output":
+                    process_element(value, indent)
+                else:
+                    # 불필요한 항목 무시
+                    if key in ["format", "metadata", "success"]:
+                        continue
+                    if key.lower().endswith(('.jpg', '.jpeg', '.png', '.gif', '.bmp')):
+                        # 이미지 데이터 처리
+                        if isinstance(value, str):  # Base64 인코딩된 이미지 데이터라고 가정
+                            # 파일 확장자 추출
+                            ext = key.split('.')[-1]
+                            image_filename = f"{key}"
+                            image_path = os.path.join(images_dir, image_filename)
+                            # Base64 디코딩 및 이미지 파일 저장
+                            with open(image_path, 'wb') as f:
+                                f.write(base64.b64decode(value))
+                            # Markdown 이미지 링크 추가 (상대 경로 사용)
+                            # image_link = f"![]({images_dir}/{image_filename})"
+                            image_link = f"![]({image_filename})"
+                            markdown_lines.append(image_link)
+                    else:
+                        markdown_lines.append(f"{ '#' * (indent + 1)} {key}\n")
+                        process_element(value, indent + 1)
+        elif isinstance(element, list):
+            for item in element:
+                process_element(item, indent)
+        else:
+            markdown_lines.append(f"{element}\n")
+    process_element(json_data)
+    # Markdown 파일 저장
+    with open(output_md_file, 'w', encoding='utf-8') as f:
+        f.write('\n'.join(markdown_lines))
+    return output_md_file
+
+class PDFConverterApp:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("PDF to MD Converter")
+        self.root.geometry("800x600")
+        
+        # 설정값 로드
+        self.config = load_config()
+        self.prompt_text = load_prompt()
+        
+        # 변수 초기화
+        self.marker_url = tk.StringVar(value=self.config["marker_url"])
+        self.ollama_url = tk.StringVar(value=self.config["ollama_url"])
+        self.chunk_size = tk.StringVar(value=str(self.config["Chunk_size"]))
+        self.timeout = tk.StringVar(value=str(self.config["timeout"]))
+        self.retries = tk.StringVar(value=str(self.config["retries"]))
+        self.retry_delay = tk.StringVar(value=str(self.config["retry_delay"]))
+        self.temperature = tk.StringVar(value=str(self.config["temperature"]))
+        self.selected_pdf = tk.StringVar(value="")
+        
+        # Ollama 모델 목록 가져오기
+        self.models = get_ollama_models(self.config["ollama_url"])
+        self.model_name = tk.StringVar()
+        if self.models:
+            if "gpt-oss:20b" in self.models:
+                self.model_name.set("gpt-oss:20b")
+            else:
+                self.model_name.set(self.models[0])
+        
+        self.create_widgets()
+        
+    def create_widgets(self):
+        # 메인 프레임
+        main_frame = ttk.Frame(self.root, padding="10")
+        main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        
+        # URL 설정 섹션
+        url_frame = ttk.LabelFrame(main_frame, text="API 설정", padding="5")
+        url_frame.grid(row=0, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=5)
+        
+        ttk.Label(url_frame, text="Marker URL:").grid(row=0, column=0, sticky=tk.W)
+        ttk.Entry(url_frame, textvariable=self.marker_url, width=50).grid(row=0, column=1, padx=5)
+        
+        ttk.Label(url_frame, text="Ollama URL:").grid(row=1, column=0, sticky=tk.W)
+        ttk.Entry(url_frame, textvariable=self.ollama_url, width=50).grid(row=1, column=1, padx=5)
+        
+        # 파라미터 설정 섹션
+        param_frame = ttk.LabelFrame(main_frame, text="번역 파라미터", padding="5")
+        param_frame.grid(row=1, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=5)
+        
+        params = [
+            ("Chunk Size:", self.chunk_size),
+            ("Timeout:", self.timeout), 
+            ("Retries:", self.retries),
+            ("Retry Delay:", self.retry_delay),
+            ("Temperature:", self.temperature)
+        ]
+        
+        for i, (label, var) in enumerate(params):
+            ttk.Label(param_frame, text=label).grid(row=i//3, column=(i%3)*2, sticky=tk.W, padx=5)
+            ttk.Entry(param_frame, textvariable=var, width=10).grid(row=i//3, column=(i%3)*2+1, padx=5)
+        
+        # 모델 선택 섹션
+        model_frame = ttk.LabelFrame(main_frame, text="모델 선택", padding="5")
+        model_frame.grid(row=2, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=5)
+        
+        ttk.Label(model_frame, text="Model Name:").grid(row=0, column=0, sticky=tk.W)
+        model_combo = ttk.Combobox(model_frame, textvariable=self.model_name, values=self.models, state="readonly")
+        model_combo.grid(row=0, column=1, padx=5)
+        
+        # PDF 선택 섹션
+        pdf_frame = ttk.LabelFrame(main_frame, text="PDF 파일 선택", padding="5")
+        pdf_frame.grid(row=3, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=5)
+        
+        ttk.Label(pdf_frame, text="선택된 PDF:").grid(row=0, column=0, sticky=tk.W)
+        ttk.Entry(pdf_frame, textvariable=self.selected_pdf, width=50, state="readonly").grid(row=0, column=1, padx=5)
+        ttk.Button(pdf_frame, text="Choose PDF", command=self.choose_pdf).grid(row=0, column=2, padx=5)
+        
+        # 프롬프트 섹션
+        prompt_frame = ttk.LabelFrame(main_frame, text="번역 프롬프트", padding="5")
+        prompt_frame.grid(row=4, column=0, columnspan=2, sticky=(tk.W, tk.E, tk.N, tk.S), pady=5)
+        
+        self.prompt_textbox = scrolledtext.ScrolledText(prompt_frame, width=80, height=10)
+        self.prompt_textbox.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        self.prompt_textbox.insert("1.0", self.prompt_text)
+        
+        # Output 섹션
+        output_frame = ttk.LabelFrame(main_frame, text="Output", padding="5")
+        output_frame.grid(row=5, column=0, columnspan=2, sticky=(tk.W, tk.E, tk.N, tk.S), pady=5)
+        
+        self.output_textbox = scrolledtext.ScrolledText(output_frame, width=80, height=15, state=tk.DISABLED)
+        self.output_textbox.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+
+        # 버튼 섹션
+        button_frame = ttk.Frame(main_frame)
+        button_frame.grid(row=6, column=0, columnspan=2, pady=10)
+        
+        ttk.Button(button_frame, text="Run", command=self.run_conversion).pack(side=tk.LEFT, padx=5)
+        ttk.Button(button_frame, text="Exit", command=self.exit_app).pack(side=tk.LEFT, padx=5)
+        
+        # 크기 조정 설정
+        self.root.columnconfigure(0, weight=1)
+        self.root.rowconfigure(0, weight=1)
+        main_frame.columnconfigure(1, weight=1)
+        main_frame.rowconfigure(4, weight=1)
+        main_frame.rowconfigure(5, weight=1)
+        prompt_frame.columnconfigure(0, weight=1)
+        prompt_frame.rowconfigure(0, weight=1)
+        output_frame.columnconfigure(0, weight=1)
+        output_frame.rowconfigure(0, weight=1)
+        
+    def choose_pdf(self):
+        """PDF 파일 선택"""
+        files = filedialog.askopenfilenames(
+            title="PDF 파일 선택",
+            filetypes=[("PDF files", "*.pdf")]
+        )
+        if files:
+            self.selected_pdf.set("; ".join(files))
+            self.selected_files = list(files)
+        
+    def save_config(self):
+        """설정값 저장"""
+        config = {
+            "marker_url": self.marker_url.get(),
+            "ollama_url": self.ollama_url.get(),
+            "Chunk_size": int(self.chunk_size.get()),
+            "timeout": int(self.timeout.get()),
+            "retries": int(self.retries.get()),
+            "retry_delay": int(self.retry_delay.get()),
+            "temperature": float(self.temperature.get())
+        }
+        
+        # config.json 저장
+        with open("config.json", "w", encoding="utf-8") as f:
+            json.dump(config, f, indent=2, ensure_ascii=False)
+        
+        # prompt.md 저장
+        prompt_content = self.prompt_textbox.get("1.0", tk.END).strip()
+        with open("prompt.md", "w", encoding="utf-8") as f:
+            f.write(prompt_content)
+        
+        return config, prompt_content
+        
+    def convert_pdf_to_md(self, pdf_path, output_dir, marker_url):
+        """Marker API를 사용하여 PDF를 MD로 변환"""
+
+        post_data = {
+            #"page_range": "4",
+            "use_llm": True,
+            "force_ocr": True,
+            "paginate_output": False,
+            "output_format": "markdown"
+        }
+
+        try:
+            # PDF 파일 업로드
+            with open(pdf_path, 'rb') as f:
+                files = {'file': (os.path.basename(pdf_path), f, 'application/pdf')}
+                response = requests.post(f"{marker_url}/marker/upload", files=files, data=post_data)
+            
+            if response.status_code == 200:
+                # 응답 처리
+                result = response.json()
+                
+                # JSON 파일 저장
+                json_path = os.path.join(output_dir, os.path.basename(pdf_path).replace('.pdf', '.json'))
+                with open(json_path, 'w', encoding='utf-8') as f:
+                    json.dump(result, f, ensure_ascii=False, indent=4)
+                
+                # json_to_markdown 함수를 사용하여 MD 파일 생성
+                md_path = os.path.join(output_dir, os.path.basename(pdf_path).replace('.pdf', '.md'))
+                ##images_path = os.path.join(output_dir, "img")
+                images_path = output_dir
+                md_path = json_to_markdown(result, md_path, images_path)
+                
+                return md_path
+            else:
+                return None
+                
+        except Exception as e:
+            print(f"PDF to MD 변환 중 오류: {e}")
+            return None
+    
+    def translate_md_to_korean(self, md_path, output_dir, ollama_url, model_name, prompt, chunk_size, timeout, retries, retry_delay, temperature):
+        """Ollama API를 사용하여 MD를 한국어로 번역"""
+        try:
+            # MD 파일 읽기
+            with open(md_path, 'r', encoding='utf-8') as f:
+                md_content = f.read()
+            
+            # 설정값 사용하여 구조 분석 분할
+            try:
+                chunks = self.split_markdown_by_structure(md_content, max_tokens=chunk_size)
+                print(f"---------- 구조 분석 분할: {len(chunks)}개의 청크 (청크크기: {chunk_size}토큰)")
+            except Exception as e:
+                print(f"---------- 구조 분석 실패, 단순 분할 사용: {e}")
+                chunks = self.split_text_simple(md_content, max_tokens=chunk_size)
+                print(f"---------- 단순 분할: {len(chunks)}개의 청크 (청크크기: {chunk_size}토큰)")
+            
+            # 번역된 내용을 즉시 _ko.md 파일에 저장
+            ko_md_path = md_path.replace('.md', '_ko.md')
+            
+            # header.yaml 삽입 후 파일 생성
+            with open(ko_md_path, 'w', encoding='utf-8') as f:
+                try:
+                    header_path = Path("header.yaml")
+                    if header_path.exists():
+                        with open(header_path, 'r', encoding='utf-8') as hf:
+                            header = hf.read()
+                        f.write(header.rstrip() + '\n\n')
+                except Exception as e:
+                    print(f"---------- header.yaml 로드 실패: {e}")
+            
+            # 청크별 번역 및 파일에 추가
+            for i, chunk in enumerate(chunks, 1):
+                print(f"---------- 청크 {i}/{len(chunks)} 번역 중... (설정값 timeout: {timeout}[sec], retries: {retries}[times])")
+                
+                translated = None
+                while not translated:
+                    translated = self.translate_chunk(chunk, ollama_url, model_name, prompt, timeout, retries, retry_delay, temperature)
+                    if translated:
+                        # 번역된 청크를 파일에 추가
+                        with open(ko_md_path, 'a', encoding='utf-8') as f:
+                            f.write(translated + '\n\n')
+                            f.flush()  # 즉시 파일에 쓰기
+                        print(f"---------- 번역된 청크 {i} 완료")
+                    else:
+                        print(f"---------- 청크 {i} 번역에 최종 실패했습니다. {retry_delay}초 후 다시 시도합니다...")
+                        time.sleep(retry_delay)
+            
+            return ko_md_path
+            
+        except Exception as e:
+            print(f"MD 번역 중 오류: {e}")
+            return None
+
+    def split_markdown_by_structure(self, content, max_tokens=800):
+        """마크다운 구조를 분석하여 의미 있는 단위로 분할"""
+        
+        md = MarkdownIt()
+        tokens = md.parse(content)
+        
+        chunks = []
+        current_chunk = []
+        current_token_count = 0
+
+        # 헤더 기호 보존을 위한 상태
+        heading_level = None  # 현재 처리 중인 헤더 레벨 (정수) 또는 None
+
+        for token in tokens:
+            # 헤더 시작 토큰을 별도로 처리하여 '#' 기호를 보존
+            if token.type == 'heading_open':
+                # 기존 로직과 동일하게 구조 경계에서 필요 시 청크 분리
+                if current_chunk and current_token_count > max_tokens * 0.8:
+                    chunk_text = ' '.join(current_chunk)
+                    chunks.append(chunk_text)
+                    current_chunk = []
+                    current_token_count = 0
+
+                # 토큰의 tag는 'h1', 'h2' ... 형태이므로 숫자를 추출하여 '#' 개수로 변환
+                try:
+                    heading_level = int(token.tag[1])  # 'h2' -> 2
+                except Exception:
+                    heading_level = 1
+                continue
+
+            if token.type == 'inline':
+                # 인라인 텍스트 처리
+                text_content = token.content
+
+                # 직전에 heading_open이 있었다면 실제 마크다운 헤더 라인을 재구성하여 삽입
+                if heading_level is not None:
+                    heading_markup = '#' * heading_level
+                    line = f"{heading_markup} {text_content}"
+                    token_count = len(text_content.split()) + heading_level
+
+                    # 새 청크 시작이 필요한 경우
+                    if current_token_count + token_count > max_tokens and current_chunk:
+                        chunk_text = ' '.join(current_chunk)
+                        chunks.append(chunk_text)
+                        current_chunk = []
+                        current_token_count = 0
+
+                    current_chunk.append(line)
+                    current_token_count += token_count
+                    heading_level = None  # 헤더 처리 완료 후 초기화
+                else:
+                    token_count = len(text_content.split())
+
+                    # 새 청크 시작이 필요한 경우
+                    if current_token_count + token_count > max_tokens and current_chunk:
+                        chunk_text = ' '.join(current_chunk)
+                        chunks.append(chunk_text)
+                        current_chunk = []
+                        current_token_count = 0
+
+                    # 텍스트 내용 추가
+                    current_chunk.append(text_content)
+                    current_token_count += token_count
+            
+            elif token.type in ['paragraph_open', 'bullet_list_open', 'ordered_list_open']:
+                # 구조적 요소 처리
+                if current_chunk and current_token_count > max_tokens * 0.8:
+                    # 임계값에 도달하면 새로운 청크 시작
+                    chunk_text = ' '.join(current_chunk)
+                    chunks.append(chunk_text)
+                    current_chunk = []
+                    current_token_count = 0
+        
+        # 마지막 청크 처리
+        if current_chunk:
+            chunk_text = ' '.join(current_chunk)
+            chunks.append(chunk_text)
+        
+        # 청크가 너무 크면 추가 분할
+        refined_chunks = []
+        for chunk in chunks:
+            token_count = len(chunk.split())
+            if token_count > max_tokens:
+                # 청크가 너무 크면 문단 단위로 분할
+                paragraphs = chunk.split('\n\n')
+                sub_chunk = []
+                sub_token_count = 0
+                
+                for para in paragraphs:
+                    para_tokens = len(para.split())
+                    if sub_token_count + para_tokens > max_tokens and sub_chunk:
+                        refined_chunks.append('\n\n'.join(sub_chunk))
+                        sub_chunk = []
+                        sub_token_count = 0
+                    
+                    sub_chunk.append(para)
+                    sub_token_count += para_tokens
+                
+                if sub_chunk:
+                    refined_chunks.append('\n\n'.join(sub_chunk))
+            else:
+                refined_chunks.append(chunk)
+        
+        return refined_chunks
+
+    def split_text_simple(self, text, max_tokens=800):
+        """단순한 텍스트 분할 (fallback)"""
+        tokens = text.split()
+        chunks = []
+        current_chunk = []
+        current_token_count = 0
+        
+        for token in tokens:
+            if current_token_count + 1 > max_tokens:
+                if current_chunk:
+                    chunks.append(' '.join(current_chunk))
+                    current_chunk = []
+                    current_token_count = 0
+            
+            current_chunk.append(token)
+            current_token_count += 1
+        
+        if current_chunk:
+            chunks.append(' '.join(current_chunk))
+        
+        return chunks
+    
+    def translate_chunk(self, chunk, ollama_url, model_name, prompt, timeout, retries, retry_delay, temperature):
+        """단일 청크 번역 (timeout 설정 반영)"""
+        for attempt in range(retries):
+            try:
+                response = requests.post(
+                    f"{ollama_url}/api/generate",
+                    json={
+                        "model": model_name,
+                        "prompt": f"{prompt}\n\n{chunk}",
+                        "stream": False,
+                        "options": {"temperature": temperature}
+                    },
+                    timeout=timeout
+                )
+                
+                if response.status_code == 200:
+                    result = response.json()
+                    return result.get('response', '').strip()
+                
+            except requests.exceptions.Timeout:
+                print(f"---------- 청크 번역 타임아웃 (시도 {attempt + 1}/{retries}): {timeout}초 초과")
+                if attempt < retries - 1:
+                    print(f"  {retry_delay}초 후 재시도합니다...")
+                    time.sleep(retry_delay)
+                else:
+                    print("---------- 최대 재시도 횟수를 초과했습니다.")
+                    return None
+            except Exception as e:
+                print(f"---------- 청크 번역 오류 (시도 {attempt + 1}/{retries}): {e}")
+                if attempt < retries - 1:
+                    print(f"  {retry_delay}초 후 재시도합니다...")
+                    time.sleep(retry_delay)
+                else:
+                    print("---------- 최대 재시도 횟수를 초과했습니다.")
+                    return None
+        
+        return None
+    
+    def render_md_to_pdf(self, ko_md_path):
+        """Quarto를 사용하여 MD를 PDF로 렌더링"""
+        try:
+            # Quarto 렌더링 명령 실행
+            output_dir = os.path.dirname(ko_md_path)
+            cmd = ["quarto", "render", ko_md_path]
+            
+            result = subprocess.run(cmd, cwd=output_dir, capture_output=True, text=True)
+            
+            if result.returncode == 0:
+                # 생성된 PDF 경로 반환
+                pdf_output = ko_md_path.replace('_ko.md', '_ko.pdf')
+                return pdf_output
+            else:
+                print(f"Quarto 렌더링 실패: {result.stderr}")
+                return None
+                
+        except Exception as e:
+            print(f"PDF 렌더링 중 오류: {e}")
+            return None
+    
+    def run_conversion(self):
+        """변환 실행"""
+        if not hasattr(self, 'selected_files') or not self.selected_files:
+            messagebox.showwarning("경고", "PDF 파일을 선택해주세요.")
+            return
+        
+        # 설정값 저장 및 가져오기
+        config, prompt_content = self.save_config()
+        
+        # 선택된 모든 PDF 파일 처리
+        for pdf_path in self.selected_files:
+            try:
+                # 작업 디렉토리 생성
+                pdf_dir = os.path.dirname(pdf_path)
+                pdf_name = os.path.basename(pdf_path)
+                base_name = pdf_name.replace('.pdf', '')
+                #output_dir = os.path.join(pdf_dir, base_name)
+                output_dir = f"{pdf_dir}/{base_name}"
+                
+                if not os.path.exists(output_dir):
+                    os.makedirs(output_dir)
+                
+                # 1. PDF to MD 변환
+                print(f"Converting {pdf_name} to MD...")
+                md_path = self.convert_pdf_to_md(pdf_path, output_dir, config["marker_url"])
+                
+                if not md_path:
+                    print(f"{pdf_name} MD 변환 실패")
+                    continue
+                
+                # 2. MD to Korean 변환
+                print(f"Translating {pdf_name} to Korean...")
+                ko_md_path = self.translate_md_to_korean(
+                    md_path, output_dir, config["ollama_url"], 
+                    self.model_name.get(), prompt_content,
+                    config["Chunk_size"], config["timeout"], 
+                    config["retries"], config["retry_delay"], 
+                    config["temperature"]
+                )
+                
+                if not ko_md_path:
+                    print(f"{pdf_name} 한국어 번역 실패")
+                    continue
+                
+                # 3. Korean MD to PDF 렌더링
+                print(f"Rendering {pdf_name} to PDF...")
+                pdf_output = self.render_md_to_pdf(ko_md_path)
+                
+                if pdf_output:
+                    print(f"{pdf_name} 변환 완료: {pdf_output}")
+                else:
+                    print(f"{pdf_name} PDF 렌더링 실패")
+                
+            except Exception as e:
+                print(f"{pdf_path} 처리 중 오류: {e}")
+        
+        messagebox.showinfo("완료", "모든 파일 변환이 완료되었습니다.")
+        
+    def exit_app(self):
+        """프로그램 종료"""
+        # 설정값 저장
+        self.save_config()
+        self.root.quit()
+
+def main():
+    root = tk.Tk()
+    app = PDFConverterApp(root)
+    
+    # Redirect stdout and stderr
+    redirector = TextRedirector(app.output_textbox)
+    sys.stdout = redirector
+    sys.stderr = redirector
+    
+    root.mainloop()
+
+if __name__ == "__main__":
+    main()

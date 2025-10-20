@@ -1,0 +1,17 @@
+---
+lang: ko
+format:
+  typst:
+    paper: "a4"
+    margin:
+      top: 20mm
+      bottom: 15mm
+      left: 20mm
+      right: 15mm
+    toc: false
+    columns: 1
+    fontsize: 10pt
+    mainfont: "Noto Serif KR"
+    sansfont: "Noto Sans KR"
+    monofont: "Noto Sans Mono"
+---
