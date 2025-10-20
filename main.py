@@ -106,7 +106,7 @@ def get_ollama_models(ollama_url):
             return models
     except:
         pass
-    return ["gpt-oss:20b"]  # 기본값
+    return ["*qwen3:30b"]  # 기본값
 
 def json_to_markdown(json_data, output_md_file, images_dir='img'):
     """
@@ -181,8 +181,8 @@ class PDFConverterApp:
         self.models = get_ollama_models(self.config["ollama_url"])
         self.model_name = tk.StringVar()
         if self.models:
-            if "gpt-oss:20b" in self.models:
-                self.model_name.set("gpt-oss:20b")
+            if "*qwen3:30b" in self.models:
+                self.model_name.set("*qwen3:30b")
             else:
                 self.model_name.set(self.models[0])
         
@@ -263,7 +263,7 @@ class PDFConverterApp:
         output_frame = ttk.LabelFrame(main_frame, text="Output", padding="5")
         output_frame.grid(row=5, column=0, columnspan=2, sticky=(tk.W, tk.E, tk.N, tk.S), pady=5)
         
-        self.output_textbox = scrolledtext.ScrolledText(output_frame, width=80, height=15, state=tk.DISABLED)
+        self.output_textbox = scrolledtext.ScrolledText(output_frame, width=80, height=10, state=tk.DISABLED)
         self.output_textbox.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
 
         # 버튼 섹션
@@ -355,7 +355,7 @@ class PDFConverterApp:
                 return None
                 
         except Exception as e:
-            print(f"PDF to MD 변환 중 오류: {e}")
+            print(f"* PDF to MD 변환 중 오류: {e}")
             return None
     
     def translate_md_to_korean(self, md_path, output_dir, ollama_url, model_name, prompt, chunk_size, timeout, retries, retry_delay, temperature):
@@ -368,11 +368,11 @@ class PDFConverterApp:
             # 설정값 사용하여 구조 분석 분할
             try:
                 chunks = self.split_markdown_by_structure(md_content, max_tokens=chunk_size)
-                print(f"---------- 구조 분석 분할: {len(chunks)}개의 청크 (청크크기: {chunk_size}토큰)")
+                print(f"* 구조 분석 분할: {len(chunks)}개의 청크 (청크크기: {chunk_size}토큰)")
             except Exception as e:
-                print(f"---------- 구조 분석 실패, 단순 분할 사용: {e}")
+                print(f"* 구조 분석 실패, 단순 분할 사용: {e}")
                 chunks = self.split_text_simple(md_content, max_tokens=chunk_size)
-                print(f"---------- 단순 분할: {len(chunks)}개의 청크 (청크크기: {chunk_size}토큰)")
+                print(f"* 단순 분할: {len(chunks)}개의 청크 (청크크기: {chunk_size}토큰)")
             
             # 번역된 내용을 즉시 _ko.md 파일에 저장
             ko_md_path = md_path.replace('.md', '_ko.md')
@@ -386,11 +386,11 @@ class PDFConverterApp:
                             header = hf.read()
                         f.write(header.rstrip() + '\n\n')
                 except Exception as e:
-                    print(f"---------- header.yaml 로드 실패: {e}")
+                    print(f"* header.yaml 로드 실패: {e}")
             
             # 청크별 번역 및 파일에 추가
             for i, chunk in enumerate(chunks, 1):
-                print(f"---------- 청크 {i}/{len(chunks)} 번역 중... (설정값 timeout: {timeout}[sec], retries: {retries}[times])")
+                print(f"* 청크 {i}/{len(chunks)} 번역 중... (설정값 timeout {timeout} [sec], retries {retries} [times])")
                 
                 translated = None
                 while not translated:
@@ -400,9 +400,9 @@ class PDFConverterApp:
                         with open(ko_md_path, 'a', encoding='utf-8') as f:
                             f.write(translated + '\n\n')
                             f.flush()  # 즉시 파일에 쓰기
-                        print(f"---------- 번역된 청크 {i} 완료")
+                        print(f"* 번역된 청크 {i} 완료")
                     else:
-                        print(f"---------- 청크 {i} 번역에 최종 실패했습니다. {retry_delay}초 후 다시 시도합니다...")
+                        print(f"* 청크 {i} 번역에 최종 실패했습니다. {retry_delay}초 후 다시 시도합니다...")
                         time.sleep(retry_delay)
             
             return ko_md_path
@@ -558,20 +558,20 @@ class PDFConverterApp:
                     return result.get('response', '').strip()
                 
             except requests.exceptions.Timeout:
-                print(f"---------- 청크 번역 타임아웃 (시도 {attempt + 1}/{retries}): {timeout}초 초과")
+                print(f"* 청크 번역 타임아웃 (시도 {attempt + 1}/{retries}): {timeout}초 초과")
                 if attempt < retries - 1:
-                    print(f"  {retry_delay}초 후 재시도합니다...")
+                    print(f"* {retry_delay}초 후 재시도합니다...")
                     time.sleep(retry_delay)
                 else:
-                    print("---------- 최대 재시도 횟수를 초과했습니다.")
+                    print("* 최대 재시도 횟수를 초과했습니다.")
                     return None
             except Exception as e:
-                print(f"---------- 청크 번역 오류 (시도 {attempt + 1}/{retries}): {e}")
+                print(f"* 청크 번역 오류 (시도 {attempt + 1}/{retries}): {e}")
                 if attempt < retries - 1:
-                    print(f"  {retry_delay}초 후 재시도합니다...")
+                    print(f"* {retry_delay}초 후 재시도합니다...")
                     time.sleep(retry_delay)
                 else:
-                    print("---------- 최대 재시도 횟수를 초과했습니다.")
+                    print("* 최대 재시도 횟수를 초과했습니다.")
                     return None
         
         return None
@@ -590,11 +590,11 @@ class PDFConverterApp:
                 pdf_output = ko_md_path.replace('_ko.md', '_ko.pdf')
                 return pdf_output
             else:
-                print(f"Quarto 렌더링 실패: {result.stderr}")
+                print(f"* Quarto 렌더링 실패: {result.stderr}")
                 return None
                 
         except Exception as e:
-            print(f"PDF 렌더링 중 오류: {e}")
+            print(f"* PDF 렌더링 중 오류: {e}")
             return None
     
     def run_conversion(self):
@@ -621,20 +621,26 @@ class PDFConverterApp:
                 base_name = pdf_name.replace('.pdf', '')
                 #output_dir = os.path.join(pdf_dir, base_name)
                 output_dir = f"{pdf_dir}/{base_name}"
-                
+                print(f"\n### Making directory: {output_dir}")
+
                 if not os.path.exists(output_dir):
                     os.makedirs(output_dir)
-                
+                    print(f"* 디렉토리 생성 완료: {output_dir}")
+                else:
+                    print(f"* 디렉토리 이미 존재: {output_dir}")
+
                 # 1. PDF to MD 변환
-                print(f"Converting {pdf_name} to MD...")
+                print(f"\n### Converting to MD : {pdf_name}")
                 md_path = self.convert_pdf_to_md(pdf_path, output_dir, config["marker_url"])
                 
-                if not md_path:
-                    print(f"{pdf_name} MD 변환 실패")
+                if md_path:
+                    print(f"* {pdf_name}: MD 변환 완료")
+                else:
+                    print(f"* {pdf_name}: MD 변환 실패")
                     continue
                 
                 # 2. MD to Korean 변환
-                print(f"Translating {pdf_name} to Korean...")
+                print(f"\n### Translating {pdf_name} to Korean...")
                 ko_md_path = self.translate_md_to_korean(
                     md_path, output_dir, config["ollama_url"], 
                     self.model_name.get(), prompt_content,
@@ -643,25 +649,28 @@ class PDFConverterApp:
                     config["temperature"]
                 )
                 
-                if not ko_md_path:
-                    print(f"{pdf_name} 한국어 번역 실패")
+                if ko_md_path:
+                    print(f"* {pdf_name} 한국어 번역 완료")
+                else:
+                    print(f"* {pdf_name} 한국어 번역 실패")
                     continue
                 
                 # 3. Korean MD to PDF 렌더링
-                print(f"Rendering {pdf_name} to PDF...")
+                print(f"\n### Rendering to PDF : {ko_md_path}")
                 pdf_output = self.render_md_to_pdf(ko_md_path)
                 
                 if pdf_output:
-                    print(f"{pdf_name} 변환 완료: {pdf_output}")
+                    print(f"* {ko_md_path} PDF 랜더링 완료: {pdf_output}")
                 else:
-                    print(f"{pdf_name} PDF 렌더링 실패")
+                    print(f"* {ko_md_path} PDF 렌더링 실패")
                 
             except Exception as e:
-                print(f"{pdf_path} 처리 중 오류: {e}")
+                print(f"* {pdf_path} 처리 중 오류: {e}")
         
         def final_tasks():
             self.run_button.config(state=tk.NORMAL)
-            messagebox.showinfo("완료", "모든 파일 변환이 완료되었습니다.")
+            #messagebox.showinfo("완료", "모든 파일 변환이 완료되었습니다.")
+            print("\n### 모든 작업이 완료되었습니다.")
         
         self.gui_queue.put(final_tasks)
 
