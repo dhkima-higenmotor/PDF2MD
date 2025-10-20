@@ -1,7 +1,8 @@
 # PDF2MD
 
-_pdf 논문을 markdown으로 변환하고, 동시에 한국어 번역까지 수행하는 프로그램_
+_Marker-pdf 및 Ollama를 사용하여 pdf 논문 또는 문서를 markdown으로 변환하고, 한국어 번역까지 수행하는 스크립트_
 
+![](PDF2MD.png)
 
 ## Prerequisites
 
