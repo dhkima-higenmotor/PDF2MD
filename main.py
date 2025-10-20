@@ -29,8 +29,8 @@ class TextRedirector(io.TextIOBase):
 def load_config():
     """config.json 파일을 로드하거나 기본값 반환"""
     default_config = {
-        "marker_url": "http://127.0.0.1:8000",
-        "ollama_url": "http://127.0.0.1:11434", 
+        "marker_url": "http://10.124.1.64:6004",
+        "ollama_url": "http://10.124.1.64:6006", 
         "Chunk_size": 5,
         "timeout": 200,
         "retries": 100,
@@ -65,7 +65,7 @@ def load_prompt():
 -- **If the table syntax is incorrect, correct it during conversion.**
 - For all mathematical equations enclosed in `$`, `$$`:
 -- **Preserves mathematical content intact.**
--- **Converts LaTeX syntax to Typst-compatible mathematical syntax** while preserving the intent of the equation (e.g., `$ rac{a}{b}$` → `$ a / b $`, inline; `$$x^2$$` → `$ x^2 $`, single line with spaces; matrices and special functions should be converted to their Typst-equivalent syntax).
+-- **Converts LaTeX syntax to Typst-compatible mathematical syntax** while preserving the intent of the equation (e.g., `$ frac{a}{b}$` → `$ a / b $`, inline; `$$x^2$$` → `$ x^2 $`, single line with spaces; matrices and special functions should be converted to their Typst-equivalent syntax).
 -- **Translates only the text surrounding equations.**
 -- **If the LaTeX syntax is incorrect, correct it during conversion.**
 - **Translates only the text content inside tables.** Preserves all markers and delimiters. 
@@ -73,13 +73,13 @@ def load_prompt():
 - In cases of ambiguity, a natural and contextual translation is preferred over a literal translation.
 - Leave blank lines for untranslatable parts. Never include the original English text or apologies/explanations.
 - **Only the translated Korean text is output.** No explanations, commentaries, or original English text are included.
-- **The original English text or other languages ​​are never output.**
+- **The original English text or other languages are never output.**
 - If the input is already in Korean or another language, it is passed on as is without modification.
 
 **Additional Guidelines for Mathematical Equations:**
 
 - **LaTeX → Typst Conversion:**
-- Replace LaTeX commands with their Typst equivalents (e.g., `rac{a}{b}` → `a / b` for inline commands, `frac(a, b)` for display commands, following Typst conventions). 
+- Replace LaTeX commands with their Typst equivalents (e.g., `frac{a}{b}` → `a / b` for inline commands, `frac(a, b)` for display commands, following Typst conventions). 
 -- Adjust delimiters ($...$, $$...$$ → $ ... $, or $$ ... $$).
 - Preserve function names and variables.
 - Map matrices, arrays, and special functions to Typst's built-in functions.
@@ -99,7 +99,7 @@ Translate this English Markdown text into Korean, following the rules above."""
 def get_ollama_models(ollama_url):
     """Ollama API에서 사용 가능한 모델 목록 가져오기"""
     try:
-        response = requests.get(f"{ollama_url}/api/tags")
+        response = requests.get(f"{ollama_url}/api/tags", timeout=5)
         if response.status_code == 200:
             data = response.json()
             models = [model['name'] for model in data.get('models', [])]
@@ -159,7 +159,7 @@ class PDFConverterApp:
     def __init__(self, root):
         self.root = root
         self.root.title("PDF to MD Converter")
-        self.root.geometry("800x600")
+        self.root.geometry("800x800")
         
         self.gui_queue = queue.Queue()
 
@@ -210,25 +210,25 @@ class PDFConverterApp:
         main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
         
         # URL 설정 섹션
-        url_frame = ttk.LabelFrame(main_frame, text="API 설정", padding="5")
+        url_frame = ttk.LabelFrame(main_frame, text="Micro Services", padding="5")
         url_frame.grid(row=0, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=5)
         
-        ttk.Label(url_frame, text="Marker URL:").grid(row=0, column=0, sticky=tk.W)
+        ttk.Label(url_frame, text="Marker-pdf URL:").grid(row=0, column=0, sticky=tk.W)
         ttk.Entry(url_frame, textvariable=self.marker_url, width=50).grid(row=0, column=1, padx=5)
         
         ttk.Label(url_frame, text="Ollama URL:").grid(row=1, column=0, sticky=tk.W)
         ttk.Entry(url_frame, textvariable=self.ollama_url, width=50).grid(row=1, column=1, padx=5)
         
         # 파라미터 설정 섹션
-        param_frame = ttk.LabelFrame(main_frame, text="번역 파라미터", padding="5")
+        param_frame = ttk.LabelFrame(main_frame, text="Parameters for LLM translation", padding="5")
         param_frame.grid(row=1, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=5)
         
         params = [
-            ("Chunk Size:", self.chunk_size),
-            ("Timeout:", self.timeout), 
-            ("Retries:", self.retries),
-            ("Retry Delay:", self.retry_delay),
-            ("Temperature:", self.temperature)
+            ("Chunk Size [1~30]:", self.chunk_size),
+            ("Timeout [sec]:", self.timeout), 
+            ("Retries [times]:", self.retries),
+            ("Retry Delay [sec]:", self.retry_delay),
+            ("Temperature [0~1]:", self.temperature)
         ]
         
         for i, (label, var) in enumerate(params):
@@ -236,7 +236,7 @@ class PDFConverterApp:
             ttk.Entry(param_frame, textvariable=var, width=10).grid(row=i//3, column=(i%3)*2+1, padx=5)
         
         # 모델 선택 섹션
-        model_frame = ttk.LabelFrame(main_frame, text="모델 선택", padding="5")
+        model_frame = ttk.LabelFrame(main_frame, text="LLM model", padding="5")
         model_frame.grid(row=2, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=5)
         
         ttk.Label(model_frame, text="Model Name:").grid(row=0, column=0, sticky=tk.W)
@@ -244,7 +244,7 @@ class PDFConverterApp:
         model_combo.grid(row=0, column=1, padx=5)
         
         # PDF 선택 섹션
-        pdf_frame = ttk.LabelFrame(main_frame, text="PDF 파일 선택", padding="5")
+        pdf_frame = ttk.LabelFrame(main_frame, text="PDF files", padding="5")
         pdf_frame.grid(row=3, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=5)
         
         ttk.Label(pdf_frame, text="선택된 PDF:").grid(row=0, column=0, sticky=tk.W)
@@ -252,7 +252,7 @@ class PDFConverterApp:
         ttk.Button(pdf_frame, text="Choose PDF", command=self.choose_pdf).grid(row=0, column=2, padx=5)
         
         # 프롬프트 섹션
-        prompt_frame = ttk.LabelFrame(main_frame, text="번역 프롬프트", padding="5")
+        prompt_frame = ttk.LabelFrame(main_frame, text="Prompt to translate", padding="5")
         prompt_frame.grid(row=4, column=0, columnspan=2, sticky=(tk.W, tk.E, tk.N, tk.S), pady=5)
         
         self.prompt_textbox = scrolledtext.ScrolledText(prompt_frame, width=80, height=10)
@@ -390,7 +390,7 @@ class PDFConverterApp:
             
             # 청크별 번역 및 파일에 추가
             for i, chunk in enumerate(chunks, 1):
-                print(f"* 청크 {i}/{len(chunks)} 번역 중... (설정값 timeout {timeout} [sec], retries {retries} [times])")
+                print(f"\n* 청크 {i}/{len(chunks)} 번역 중... (설정값 timeout {timeout} [sec], retries {retries} [times])")
                 
                 translated = None
                 while not translated:
@@ -401,6 +401,11 @@ class PDFConverterApp:
                             f.write(translated + '\n\n')
                             f.flush()  # 즉시 파일에 쓰기
                         print(f"* 번역된 청크 {i} 완료")
+                        print("\n===== chunk ==============")
+                        print(chunk)
+                        print("\n===== tranlated ==========")
+                        print(translated)
+                        print("\n===== end of chunk =======")
                     else:
                         print(f"* 청크 {i} 번역에 최종 실패했습니다. {retry_delay}초 후 다시 시도합니다...")
                         time.sleep(retry_delay)
