@@ -242,7 +242,7 @@ class PDFConverterApp:
         param_frame.grid(row=1, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=5)
         
         params = [
-            ("Chunk Size [1~30]:", self.chunk_size),
+            ("Chunk Size [1~]:", self.chunk_size),
             ("Timeout [sec]:", self.timeout), 
             ("Retries [times]:", self.retries),
             ("Retry Delay [sec]:", self.retry_delay),
@@ -695,9 +695,9 @@ class PDFConverterApp:
                 pdf_output = self.render_md_to_pdf(ko_md_path)
                 
                 if pdf_output:
-                    print(f"* {ko_md_path} PDF 랜더링 완료: {pdf_output}")
+                    print(f"\n* {ko_md_path} PDF 랜더링 완료: {pdf_output}")
                 else:
-                    print(f"* {ko_md_path} PDF 렌더링 실패")
+                    print(f"\n* {ko_md_path} PDF 렌더링 실패")
                 
             except Exception as e:
                 print(f"* {pdf_path} 처리 중 오류: {e}")
