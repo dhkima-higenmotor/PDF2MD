@@ -14,6 +14,8 @@ import sys
 import io
 import threading
 import queue
+import tkinter.font as tkFont
+from datetime import datetime
 
 class TextRedirector(io.TextIOBase):
     def __init__(self, queue):
@@ -106,7 +108,7 @@ def get_ollama_models(ollama_url):
             return models
     except:
         pass
-    return ["*qwen3:30b"]  # 기본값
+    return ["gpt-oss:20b"]  # 기본값
 
 def json_to_markdown(json_data, output_md_file, images_dir='img'):
     """
@@ -161,6 +163,22 @@ class PDFConverterApp:
         self.root.title("PDF to MD Converter")
         self.root.geometry("800x800")
         
+        # Font settings
+        preferred_fonts = ["Noto Sans KR", "맑은 고딕", "AppleGothic", "Noto Sans CJK KR", "Segoe UI", "Arial"]
+        available_fonts = tkFont.families()
+        selected_font = next((f for f in preferred_fonts if f in available_fonts), "TkDefaultFont")
+        
+        font_size = 10
+        
+        # Set default font for tk widgets
+        for font_name in ["TkDefaultFont", "TkTextFont", "TkFixedFont"]:
+            default_font = tkFont.nametofont(font_name)
+            default_font.configure(family=selected_font, size=font_size)
+
+        # Set default font for ttk widgets
+        style = ttk.Style()
+        style.configure('.', font=(selected_font, font_size))
+        
         self.gui_queue = queue.Queue()
 
         # 설정값 로드
@@ -181,8 +199,8 @@ class PDFConverterApp:
         self.models = get_ollama_models(self.config["ollama_url"])
         self.model_name = tk.StringVar()
         if self.models:
-            if "*qwen3:30b" in self.models:
-                self.model_name.set("*qwen3:30b")
+            if "gpt-oss:20b" in self.models:
+                self.model_name.set("gpt-oss:20b")
             else:
                 self.model_name.set(self.models[0])
         
@@ -401,11 +419,11 @@ class PDFConverterApp:
                             f.write(translated + '\n\n')
                             f.flush()  # 즉시 파일에 쓰기
                         print(f"* 번역된 청크 {i} 완료")
-                        print("\n===== chunk ==============")
+                        print(f"\n===== chunk {i} ==============")
                         print(chunk)
-                        print("\n===== tranlated ==========")
+                        print(f"\n===== tranlated {i} ==========")
                         print(translated)
-                        print("\n===== end of chunk =======")
+                        print(f"\n===== end of chunk {i} =======")
                     else:
                         print(f"* 청크 {i} 번역에 최종 실패했습니다. {retry_delay}초 후 다시 시도합니다...")
                         time.sleep(retry_delay)
@@ -620,6 +638,9 @@ class PDFConverterApp:
         # 선택된 모든 PDF 파일 처리
         for pdf_path in self.selected_files:
             try:
+                ## 현재 날짜와 시간 표시
+                now = datetime.now()
+                print("\n### ", now.strftime("%Y-%m-%d %H:%M:%S"))
                 # 작업 디렉토리 생성
                 pdf_dir = os.path.dirname(pdf_path)
                 pdf_name = os.path.basename(pdf_path)
@@ -635,6 +656,9 @@ class PDFConverterApp:
                     print(f"* 디렉토리 이미 존재: {output_dir}")
 
                 # 1. PDF to MD 변환
+                ## 현재 날짜와 시간 표시
+                now = datetime.now()
+                print("\n### ", now.strftime("%Y-%m-%d %H:%M:%S"))
                 print(f"\n### Converting to MD : {pdf_name}")
                 md_path = self.convert_pdf_to_md(pdf_path, output_dir, config["marker_url"])
                 
@@ -645,6 +669,9 @@ class PDFConverterApp:
                     continue
                 
                 # 2. MD to Korean 변환
+                ## 현재 날짜와 시간 표시
+                now = datetime.now()
+                print("\n### ", now.strftime("%Y-%m-%d %H:%M:%S"))
                 print(f"\n### Translating {pdf_name} to Korean...")
                 ko_md_path = self.translate_md_to_korean(
                     md_path, output_dir, config["ollama_url"], 
@@ -661,6 +688,9 @@ class PDFConverterApp:
                     continue
                 
                 # 3. Korean MD to PDF 렌더링
+                ## 현재 날짜와 시간 표시
+                now = datetime.now()
+                print("\n### ", now.strftime("%Y-%m-%d %H:%M:%S"))
                 print(f"\n### Rendering to PDF : {ko_md_path}")
                 pdf_output = self.render_md_to_pdf(ko_md_path)
                 
@@ -675,6 +705,9 @@ class PDFConverterApp:
         def final_tasks():
             self.run_button.config(state=tk.NORMAL)
             #messagebox.showinfo("완료", "모든 파일 변환이 완료되었습니다.")
+            ## 현재 날짜와 시간 표시
+            now = datetime.now()
+            print("\n### ", now)
             print("\n### 모든 작업이 완료되었습니다.")
         
         self.gui_queue.put(final_tasks)
