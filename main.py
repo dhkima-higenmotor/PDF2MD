@@ -418,14 +418,14 @@ class PDFConverterApp:
                         with open(ko_md_path, 'a', encoding='utf-8') as f:
                             f.write(translated + '\n\n')
                             f.flush()  # 즉시 파일에 쓰기
-                        print(f"* 번역된 청크 {i} 완료")
-                        print(f"\n===== chunk {i} ==============")
+                        print(f"* 번역된 청크 {i}/{len(chunks)} 완료")
+                        print(f"\n===== chunk {i}/{len(chunks)} ==============")
                         print(chunk)
-                        print(f"\n===== tranlated {i} ==========")
+                        print(f"\n===== tranlated {i}/{len(chunks)} ==========")
                         print(translated)
-                        print(f"\n===== end of chunk {i} =======")
+                        print(f"\n===== end of chunk {i}/{len(chunks)} =======")
                     else:
-                        print(f"* 청크 {i} 번역에 최종 실패했습니다. {retry_delay}초 후 다시 시도합니다...")
+                        print(f"* 청크 {i}/{len(chunks)} 번역에 최종 실패했습니다. {retry_delay}초 후 다시 시도합니다...")
                         time.sleep(retry_delay)
             
             return ko_md_path
