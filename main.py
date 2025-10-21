@@ -265,7 +265,7 @@ class PDFConverterApp:
         pdf_frame = ttk.LabelFrame(main_frame, text="PDF files", padding="5")
         pdf_frame.grid(row=3, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=5)
         
-        ttk.Label(pdf_frame, text="선택된 PDF:").grid(row=0, column=0, sticky=tk.W)
+        ttk.Label(pdf_frame, text="PDFs List:").grid(row=0, column=0, sticky=tk.W)
         ttk.Entry(pdf_frame, textvariable=self.selected_pdf, width=50, state="readonly").grid(row=0, column=1, padx=5)
         ttk.Button(pdf_frame, text="Choose PDF", command=self.choose_pdf).grid(row=0, column=2, padx=5)
         
