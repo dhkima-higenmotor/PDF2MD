@@ -161,7 +161,7 @@ class PDFConverterApp:
     def __init__(self, root):
         self.root = root
         self.root.title("PDF to MD Converter")
-        self.root.geometry("800x800")
+        self.root.geometry("650x800")
         
         # Font settings
         preferred_fonts = ["Noto Sans KR", "맑은 고딕", "AppleGothic", "Noto Sans CJK KR", "Segoe UI", "Arial"]
