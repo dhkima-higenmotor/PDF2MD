@@ -108,7 +108,7 @@ def get_ollama_models(ollama_url):
             return models
     except:
         pass
-    return ["gpt-oss:20b"]  # 기본값
+    return ["qwen3-vl:30b-a3b-instruct"]  # 기본값
 
 def json_to_markdown(json_data, output_md_file, images_dir='img'):
     """
@@ -199,8 +199,8 @@ class PDFConverterApp:
         self.models = get_ollama_models(self.config["ollama_url"])
         self.model_name = tk.StringVar()
         if self.models:
-            if "gpt-oss:20b" in self.models:
-                self.model_name.set("gpt-oss:20b")
+            if "qwen3-vl:30b-a3b-instruct" in self.models:
+                self.model_name.set("qwen3-vl:30b-a3b-instruct")
             else:
                 self.model_name.set(self.models[0])
         
