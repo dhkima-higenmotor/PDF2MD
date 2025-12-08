@@ -37,7 +37,8 @@ def load_config():
         "timeout": 200,
         "retries": 100,
         "retry_delay": 10,
-        "temperature": 0.3
+        "temperature": 0.3,
+        "render_pdf": True
     }
     
     try:
@@ -77,15 +78,6 @@ def load_prompt():
 - **Only the translated Korean text is output.** No explanations, commentaries, or original English text are included.
 - **The original English text or other languages are never output.**
 - If the input is already in Korean or another language, it is passed on as is without modification.
-
-**Additional Guidelines for Mathematical Equations:**
-
-- **LaTeX → Typst Conversion:**
-- Replace LaTeX commands with their Typst equivalents (e.g., `frac{a}{b}` → `a / b` for inline commands, `frac(a, b)` for display commands, following Typst conventions). 
--- Adjust delimiters ($...$, $$...$$ → $ ... $, or $$ ... $$).
-- Preserve function names and variables.
-- Map matrices, arrays, and special functions to Typst's built-in functions.
-- When in doubt, use Typst's math mode syntax for readability and logical consistency.
 
 Translate this English Markdown text into Korean, following the rules above."""
     
@@ -193,6 +185,7 @@ class PDFConverterApp:
         self.retries = tk.StringVar(value=str(self.config["retries"]))
         self.retry_delay = tk.StringVar(value=str(self.config["retry_delay"]))
         self.temperature = tk.StringVar(value=str(self.config["temperature"]))
+        self.render_pdf = tk.BooleanVar(value=self.config.get("render_pdf", True))
         self.selected_pdf = tk.StringVar(value="")
         
         # Ollama 모델 목록 가져오기
@@ -200,7 +193,7 @@ class PDFConverterApp:
         self.model_name = tk.StringVar()
         if self.models:
             if "qwen3:30b-a3b-instruct-2507-q4_K_M" in self.models:
-                self.model_name.set("qwen3-vl:30b-a3b-instruct")
+                self.model_name.set("qwen3:30b-a3b-instruct-2507-q4_K_M")
             else:
                 self.model_name.set(self.models[0])
         
@@ -232,10 +225,11 @@ class PDFConverterApp:
         url_frame.grid(row=0, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=5)
         
         ttk.Label(url_frame, text="Marker-pdf URL:").grid(row=0, column=0, sticky=tk.W)
-        ttk.Entry(url_frame, textvariable=self.marker_url, width=50).grid(row=0, column=1, padx=5)
+        ttk.Entry(url_frame, textvariable=self.marker_url, width=50).grid(row=0, column=1, padx=5, sticky=(tk.W, tk.E))
         
         ttk.Label(url_frame, text="Ollama URL:").grid(row=1, column=0, sticky=tk.W)
-        ttk.Entry(url_frame, textvariable=self.ollama_url, width=50).grid(row=1, column=1, padx=5)
+        ttk.Entry(url_frame, textvariable=self.ollama_url, width=50).grid(row=1, column=1, padx=5, sticky=(tk.W, tk.E))
+        url_frame.columnconfigure(1, weight=1)
         
         # 파라미터 설정 섹션
         param_frame = ttk.LabelFrame(main_frame, text="Parameters for LLM translation", padding="5")
@@ -253,20 +247,27 @@ class PDFConverterApp:
             ttk.Label(param_frame, text=label).grid(row=i//3, column=(i%3)*2, sticky=tk.W, padx=5)
             ttk.Entry(param_frame, textvariable=var, width=10).grid(row=i//3, column=(i%3)*2+1, padx=5)
         
+        # PDF Rendering 설정
+        i = len(params)
+        ttk.Label(param_frame, text="PDF Rendering:").grid(row=i//3, column=(i%3)*2, sticky=tk.W, padx=5)
+        ttk.Checkbutton(param_frame, text="Enable", variable=self.render_pdf).grid(row=i//3, column=(i%3)*2+1, padx=5, sticky=tk.W)
+        
         # 모델 선택 섹션
         model_frame = ttk.LabelFrame(main_frame, text="LLM model", padding="5")
         model_frame.grid(row=2, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=5)
         
         ttk.Label(model_frame, text="Model Name:").grid(row=0, column=0, sticky=tk.W)
         model_combo = ttk.Combobox(model_frame, textvariable=self.model_name, values=self.models, state="readonly")
-        model_combo.grid(row=0, column=1, padx=5)
+        model_combo.grid(row=0, column=1, padx=5, sticky=(tk.W, tk.E))
+        model_frame.columnconfigure(1, weight=1)
         
         # PDF 선택 섹션
         pdf_frame = ttk.LabelFrame(main_frame, text="PDF files", padding="5")
         pdf_frame.grid(row=3, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=5)
         
         ttk.Label(pdf_frame, text="PDFs List:").grid(row=0, column=0, sticky=tk.W)
-        ttk.Entry(pdf_frame, textvariable=self.selected_pdf, width=50, state="readonly").grid(row=0, column=1, padx=5)
+        ttk.Entry(pdf_frame, textvariable=self.selected_pdf, width=50, state="readonly").grid(row=0, column=1, padx=5, sticky=(tk.W, tk.E))
+        pdf_frame.columnconfigure(1, weight=1)
         ttk.Button(pdf_frame, text="Choose PDF", command=self.choose_pdf).grid(row=0, column=2, padx=5)
         
         # 프롬프트 섹션
@@ -322,7 +323,8 @@ class PDFConverterApp:
             "timeout": int(self.timeout.get()),
             "retries": int(self.retries.get()),
             "retry_delay": int(self.retry_delay.get()),
-            "temperature": float(self.temperature.get())
+            "temperature": float(self.temperature.get()),
+            "render_pdf": self.render_pdf.get()
         }
         
         # config.json 저장
@@ -392,8 +394,8 @@ class PDFConverterApp:
                 chunks = self.split_text_simple(md_content, max_tokens=chunk_size)
                 print(f"* 단순 분할: {len(chunks)}개의 청크 (청크크기: {chunk_size}토큰)")
             
-            # 번역된 내용을 즉시 _ko.md 파일에 저장
-            ko_md_path = md_path.replace('.md', '_ko.md')
+            # 번역된 내용을 즉시 _ko.qmd 파일에 저장
+            ko_md_path = md_path.replace('.md', '_ko.qmd')
             
             # header.yaml 삽입 후 파일 생성
             with open(ko_md_path, 'w', encoding='utf-8') as f:
@@ -610,7 +612,7 @@ class PDFConverterApp:
             
             if result.returncode == 0:
                 # 생성된 PDF 경로 반환
-                pdf_output = ko_md_path.replace('_ko.md', '_ko.pdf')
+                pdf_output = ko_md_path.replace('_ko.qmd', '_ko.pdf')
                 return pdf_output
             else:
                 print(f"* Quarto 렌더링 실패: {result.stderr}")
@@ -688,16 +690,19 @@ class PDFConverterApp:
                     continue
                 
                 # 3. Korean MD to PDF 렌더링
-                ## 현재 날짜와 시간 표시
-                now = datetime.now()
-                print("\n### ", now.strftime("%Y-%m-%d %H:%M:%S"))
-                print(f"\n### Rendering to PDF : {ko_md_path}")
-                pdf_output = self.render_md_to_pdf(ko_md_path)
-                
-                if pdf_output:
-                    print(f"\n* {ko_md_path} PDF 랜더링 완료: {pdf_output}")
+                if config.get("render_pdf", True):
+                    ## 현재 날짜와 시간 표시
+                    now = datetime.now()
+                    print("\n### ", now.strftime("%Y-%m-%d %H:%M:%S"))
+                    print(f"\n### Rendering to PDF : {ko_md_path}")
+                    pdf_output = self.render_md_to_pdf(ko_md_path)
+                    
+                    if pdf_output:
+                        print(f"\n* {ko_md_path} PDF 랜더링 완료: {pdf_output}")
+                    else:
+                        print(f"\n* {ko_md_path} PDF 렌더링 실패")
                 else:
-                    print(f"\n* {ko_md_path} PDF 렌더링 실패")
+                    print(f"\n* PDF 렌더링 건너뜀 (설정 비활성화)")
                 
             except Exception as e:
                 print(f"* {pdf_path} 처리 중 오류: {e}")

@@ -1,17 +1,46 @@
 ---
 lang: ko
+
+# 문서 클래스 및 옵션 설정 (필수 추가)
+documentclass: scrartcl
+classoption:
+  - DIV=11
+  - numbers=noendperiod
+  - enabledeprecatedfontcommands # 구형 폰트 명령어(\tt 등) 오류 해결을 위해 추가
+
+# 글자 크기
+fontsize: 11pt
+
 format:
-  typst:
+  pdf:
+    pdf-engine: xelatex
+    
+    # 용지 및 여백 설정
     paper: "a4"
     margin:
       top: 20mm
       bottom: 15mm
       left: 20mm
       right: 15mm
+    
+    # 레이아웃 설정
     toc: false
     columns: 1
-    fontsize: 10pt
-    mainfont: "Noto Serif KR"
-    sansfont: "Noto Sans KR"
-    monofont: "Noto Sans Mono"
+    
+    # 폰트 설정 (영문/숫자용)
+    mainfont: "NotoSerifKR-VF.ttf"
+    sansfont: "NotoSansKR-VF.ttf"
+    monofont: "Consolas"
+    
+    # 한글 처리를 위한 추가 설정 및 패키지 로드
+    include-in-header:
+      text: |
+        \usepackage{xeCJK}
+        % [중요] 한글 띄어쓰기 유지를 위한 설정
+        \xeCJKsetup{CJKspace=true}
+        \setCJKmainfont{NotoSerifKR-VF.ttf}
+        \setCJKsansfont{NotoSansKR-VF.ttf}
+        \setCJKmonofont{Consolas}
+        % 캡션 설정 (선택 사항)
+        \KOMAoption{captions}{tableheading}
 ---
