@@ -14,7 +14,10 @@ fontsize: 11pt
 format:
   pdf:
     pdf-engine: xelatex
-    
+    pdf-engine-opts:
+      - "-interaction=nonstopmode"
+      - "-f"
+
     # 용지 및 여백 설정
     paper: "a4"
     margin:
