@@ -1,49 +1,48 @@
 ---
 lang: ko
-
-# 문서 클래스 및 옵션 설정 (필수 추가)
-documentclass: scrartcl
 classoption:
   - DIV=11
   - numbers=noendperiod
-  - enabledeprecatedfontcommands # 구형 폰트 명령어(\tt 등) 오류 해결을 위해 추가
-
-# 글자 크기
-fontsize: 11pt
-
+  - enabledeprecatedfontcommands  # 구형 폰트 명령어(\tt 등) 오류 해결을 위해 추가
+# pdf 랜더링 설정
 format:
   pdf:
-    pdf-engine: xelatex
-    pdf-engine-opts:
-      - "-interaction=nonstopmode"
-      - "-f"
-
-    # 용지 및 여백 설정
-    paper: "a4"
-    margin:
-      top: 20mm
-      bottom: 15mm
-      left: 20mm
-      right: 15mm
-    
-    # 레이아웃 설정
-    toc: false
-    columns: 1
-    
-    # 폰트 설정 (영문/숫자용)
-    mainfont: "NotoSerifKR-VF.ttf"
-    sansfont: "NotoSansKR-VF.ttf"
-    monofont: "Consolas"
-    
-    # 한글 처리를 위한 추가 설정 및 패키지 로드
-    include-in-header:
-      text: |
-        \usepackage{xeCJK}
-        % [중요] 한글 띄어쓰기 유지를 위한 설정
-        \xeCJKsetup{CJKspace=true}
-        \setCJKmainfont{NotoSerifKR-VF.ttf}
-        \setCJKsansfont{NotoSansKR-VF.ttf}
-        \setCJKmonofont{Consolas}
-        % 캡션 설정 (선택 사항)
-        \KOMAoption{captions}{tableheading}
+    pdf-engine: xelatex           # pdf 랜더링 엔진
+    documentclass: scrartcl       # 기본 : article
+    papersize: a4                 # 기본 : letter
+    fontsize: 10pt                # 기본 : 11pt
+    df-print: kable               # 테이블 푯현
+    # 레이아웃 및 디자인
+    geometry:
+      - top=30mm
+      - bottom=30mm
+      - left=25mm
+      - right=25mm
+      - heightrounded
+    linestretch: 1.2              # 줄간격
+    indent: true                  # 문단 첫 줄 들여쓰기
+    toc: false                    # 목차생성
+    toc-depth: 2                  # 목차 깊이
+    columns: 1                    # 컬럼 수
+    number-sections: false        # 섹션 번호 자동 부여
+    highlight-style: github       # 코드 하이라이팅 스타일
+    colorlinks: true              # 링크에 색상 적용
+    linkcolor: "blue"             # 내부 링크 색상 (목차 등)
+    urlcolor: "teal"              # 외부 URL 색상
+    # 추가 LaTeX 패키지
+    header-includes:
+      - \usepackage{kotex}                    # 패키지 : 한글 타이포그래피 규칙(자간, 조사 등) 적용
+      - \usepackage{setspace}                 # 패키지 : 줄간격 제어
+      - \usepackage{fontspec}                 # 패키지 : 폰트 상세 설정 (Bold, Italic 강제 적용)
+      - \setkomafont{disposition}{\bfseries}  # 모든 제목(disposition)을 굵게(\bfseries) 설정
+      - \addtokomafont{section}{\huge}        # 최상위 섹션(#, Heading 1) 크기를 \huge(아주 큼)로 설정
+      - \addtokomafont{subsection}{\Large}    # 하위 섹션(##, Heading 2) 크기를 \Large(큼)로 설정
+      # 한글 폰트 설정
+      - \setmainhangulfont[AutoFakeBold=3,AutoFakeSlant=0.2]{NotoSerifKR-VF.ttf}
+      - \setsanshangulfont[AutoFakeBold=3,AutoFakeSlant=0.2]{NotoSansKR-VF.ttf}
+      - \setmonohangulfont[AutoFakeBold=3,AutoFakeSlant=0.2]{Consolas}
+      # 영문 폰트 설정
+      - \setmainfont[AutoFakeBold=3,AutoFakeSlant=0.2]{NotoSerifKR-VF.ttf}
+      - \setsansfont[AutoFakeBold=3,AutoFakeSlant=0.2]{NotoSansKR-VF.ttf}
+      - \setmonofont[AutoFakeBold=3,AutoFakeSlant=0.2]{Consolas}
 ---
